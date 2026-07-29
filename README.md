@@ -58,7 +58,8 @@ when its Terminal window closes.
 - Circuit designs remain portable text codes through **Menu → Save This Design**
   and **Load A Design**.
 - The wrapper adds a local named-design library. Paste the game's save code into
-  a slot, then copy it back when loading. The library supports any number of
+  a slot, then copy it back when loading. Open it from the **Design library**
+  button beside the playback controls. The library supports any number of
   designs and JSON export/import for backup or transfer between browsers.
 
 The design library uses browser `localStorage` on this machine. It never
