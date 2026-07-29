@@ -1,5 +1,6 @@
 web/kohctpyktop.swf
 web/kohctpyktop.mp3
 web/ruffle/
+web/.ruffle-*/
 .DS_Store
 *.log

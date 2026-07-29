@@ -52,7 +52,18 @@ verify "$SWF_SOURCE" "$SWF_SHA256" "KOHCTPYKTOP SWF"
 verify "$MP3_SOURCE" "$MP3_SHA256" "KOHCTPYKTOP music"
 
 TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/kohctpyktop-setup.XXXXXX")
-trap 'rm -rf "$TEMP_DIR"' EXIT HUP INT TERM
+STAGED_RUFFLE="$WEB_DIR/.ruffle-staged.$$"
+PREVIOUS_RUFFLE="$WEB_DIR/.ruffle-previous.$$"
+cleanup() {
+  rm -rf "$TEMP_DIR" "$STAGED_RUFFLE"
+  if [ -d "$PREVIOUS_RUFFLE" ] && [ ! -d "$WEB_DIR/ruffle" ]; then
+    mv "$PREVIOUS_RUFFLE" "$WEB_DIR/ruffle"
+  else
+    rm -rf "$PREVIOUS_RUFFLE"
+  fi
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
 RUFFLE_ZIP="$TEMP_DIR/ruffle-web.zip"
 RUFFLE_URL="https://github.com/ruffle-rs/ruffle/releases/download/v$RUFFLE_VERSION/ruffle-$RUFFLE_VERSION-web-selfhosted.zip"
 
@@ -60,9 +71,18 @@ echo "Downloading the official Ruffle $RUFFLE_VERSION web runtime..."
 curl -fL "$RUFFLE_URL" -o "$RUFFLE_ZIP"
 verify "$RUFFLE_ZIP" "$RUFFLE_SHA256" "Ruffle web runtime"
 
-rm -rf "$WEB_DIR/ruffle"
-mkdir -p "$WEB_DIR/ruffle"
-unzip -q "$RUFFLE_ZIP" -d "$WEB_DIR/ruffle"
+mkdir -p "$WEB_DIR" "$STAGED_RUFFLE"
+unzip -q "$RUFFLE_ZIP" -d "$STAGED_RUFFLE"
+if [ ! -f "$STAGED_RUFFLE/ruffle.js" ]; then
+  echo "The verified Ruffle archive did not contain ruffle.js." >&2
+  exit 1
+fi
+
+if [ -d "$WEB_DIR/ruffle" ]; then
+  mv "$WEB_DIR/ruffle" "$PREVIOUS_RUFFLE"
+fi
+mv "$STAGED_RUFFLE" "$WEB_DIR/ruffle"
+rm -rf "$PREVIOUS_RUFFLE"
 cp "$SWF_SOURCE" "$WEB_DIR/kohctpyktop.swf"
 cp "$MP3_SOURCE" "$WEB_DIR/kohctpyktop.mp3"
 

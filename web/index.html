@@ -53,7 +53,7 @@
     </div>
     <p>In the game, choose Save This Design and copy its text code. Paste it here to keep multiple named designs. Use Copy beside a design before choosing Load A Design in the game.</p>
     <input id="save-name" type="text" maxlength="120" placeholder="Design name">
-    <textarea id="save-code" spellcheck="false" placeholder="Paste the game's design code"></textarea>
+    <textarea id="save-code" maxlength="100000" spellcheck="false" placeholder="Paste the game's design code"></textarea>
     <div class="save-actions">
       <button id="store-save" type="button">Store design</button>
       <button id="export-saves" type="button">Export library</button>
@@ -94,14 +94,25 @@
 
     try {
       const stored = JSON.parse(localStorage.getItem(storageKey) || "[]");
-      if (Array.isArray(stored)) designs = stored.filter(item => item && typeof item.name === "string" && typeof item.code === "string");
+      if (Array.isArray(stored)) {
+        designs = stored
+          .filter(item => item && typeof item.name === "string" && item.name.length <= 120 && typeof item.code === "string" && item.code.length <= 100000)
+          .map(item => ({ ...item, id: typeof item.id === "string" ? item.id : crypto.randomUUID() }));
+      }
     } catch (_) {
       designs = [];
     }
 
-    function persist() {
-      localStorage.setItem(storageKey, JSON.stringify(designs));
-      renderDesigns();
+    function persist(nextDesigns) {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(nextDesigns));
+        designs = nextDesigns;
+        renderDesigns();
+        return true;
+      } catch (_) {
+        alert("The design library could not be saved. Export existing designs and free some browser storage before trying again.");
+        return false;
+      }
     }
 
     function renderDesigns() {
@@ -127,17 +138,21 @@
         copy.type = "button";
         copy.textContent = "Copy";
         copy.addEventListener("click", async () => {
-          await navigator.clipboard.writeText(design.code);
-          copy.textContent = "Copied";
-          setTimeout(() => { copy.textContent = "Copy"; }, 1200);
+          try {
+            await navigator.clipboard.writeText(design.code);
+            copy.textContent = "Copied";
+            setTimeout(() => { copy.textContent = "Copy"; }, 1200);
+          } catch (_) {
+            codeInput.value = design.code;
+            alert("Clipboard access was unavailable. The design code has been placed in the text box for manual copying.");
+          }
         });
         const remove = document.createElement("button");
         remove.type = "button";
         remove.textContent = "Delete";
         remove.addEventListener("click", () => {
           if (!confirm(`Delete the local design “${design.name}”?`)) return;
-          designs = designs.filter(item => item.id !== design.id);
-          persist();
+          persist(designs.filter(item => item.id !== design.id));
         });
         actions.append(copy, remove);
         entry.append(title, preview, actions);
@@ -152,10 +167,11 @@
         alert("Enter both a design name and the code produced by the game.");
         return;
       }
-      designs.unshift({ id: crypto.randomUUID(), name, code, savedAt: new Date().toISOString() });
-      nameInput.value = "";
-      codeInput.value = "";
-      persist();
+      const nextDesigns = [{ id: crypto.randomUUID(), name, code, savedAt: new Date().toISOString() }, ...designs];
+      if (persist(nextDesigns)) {
+        nameInput.value = "";
+        codeInput.value = "";
+      }
     });
 
     document.getElementById("export-saves").addEventListener("click", () => {
@@ -164,18 +180,20 @@
       link.href = URL.createObjectURL(blob);
       link.download = `kohctpyktop-designs-${new Date().toISOString().slice(0, 10)}.json`;
       link.click();
-      URL.revokeObjectURL(link.href);
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     });
 
     document.getElementById("import-saves").addEventListener("change", async event => {
       const file = event.target.files[0];
       if (!file) return;
       try {
+        if (file.size > 5 * 1024 * 1024) throw new Error("Library files are limited to 5 MB");
         const payload = JSON.parse(await file.text());
         if (payload.format !== "kohctpyktop-design-library-v1" || !Array.isArray(payload.designs)) throw new Error("Unrecognized library format");
-        const incoming = payload.designs.filter(item => item && typeof item.name === "string" && typeof item.code === "string");
-        designs = [...incoming.map(item => ({ ...item, id: crypto.randomUUID() })), ...designs];
-        persist();
+        if (payload.designs.length > 1000) throw new Error("A library may contain at most 1,000 designs");
+        const incoming = payload.designs.filter(item => item && typeof item.name === "string" && item.name.trim() && item.name.length <= 120 && typeof item.code === "string" && item.code.trim() && item.code.length <= 100000);
+        if (incoming.length !== payload.designs.length) throw new Error("One or more designs have invalid names or codes");
+        persist([...incoming.map(item => ({ ...item, id: crypto.randomUUID() })), ...designs]);
       } catch (error) {
         alert(`Could not import this library: ${error.message}`);
       } finally {

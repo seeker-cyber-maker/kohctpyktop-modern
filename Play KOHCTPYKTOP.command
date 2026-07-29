@@ -4,7 +4,6 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 WEB_DIR="$PROJECT_DIR/web"
 PORT=8765
-LOG_FILE="$(mktemp /tmp/kohctpyktop-web.XXXXXX.log)"
 
 for required in "$WEB_DIR/kohctpyktop.swf" "$WEB_DIR/kohctpyktop.mp3" "$WEB_DIR/ruffle/ruffle.js"; do
   if [[ ! -f "$required" ]]; then
@@ -21,6 +20,7 @@ if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/
   exit 1
 fi
 
+LOG_FILE="$(mktemp "${TMPDIR:-/tmp}/kohctpyktop-web.XXXXXX.log")"
 cd "$WEB_DIR"
 python3 -m http.server "$PORT" --bind 127.0.0.1 >"$LOG_FILE" 2>&1 &
 SERVER_PID=$!
